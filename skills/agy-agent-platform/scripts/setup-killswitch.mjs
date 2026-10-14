@@ -40,7 +40,18 @@ function resolveGcloudCmd() {
 }
 
 /**
- * 解析命令列參數 (--amount=10 --currency=USD --period=month --billing-account=... --control-project=... --target-project=... --region=us-central1 --skip-function-deploy --redeploy-function --dry-run-test)
+ * 取得本地當日日期字串 (YYYY-MM-DD)，作為 --start-date 預設起始日以排除歷史已用抵免額
+ */
+function getTodayDateString() {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/**
+ * 解析命令列參數 (--amount=1300 --start-date=YYYY-MM-DD --period=custom|month|year --currency=TWD --billing-account=... --control-project=... --target-project=... --region=us-central1 --skip-function-deploy --redeploy-function --dry-run-test)
  */
 function parseCliArgs(argv) {
   const parsed = {};
@@ -51,6 +62,7 @@ function parseCliArgs(argv) {
     else if (arg.startsWith('--control-project=')) parsed.controlProjectId = arg.split('=')[1];
     else if (arg.startsWith('--target-project=')) parsed.targetProjectId = arg.split('=')[1];
     else if (arg.startsWith('--period=')) parsed.calendarPeriod = arg.split('=')[1];
+    else if (arg.startsWith('--start-date=')) parsed.startDate = arg.split('=')[1];
     else if (arg.startsWith('--region=')) parsed.region = arg.split('=')[1];
     else if (arg === '--skip-function-deploy') parsed.skipFunctionDeploy = true;
     else if (arg === '--redeploy-function') parsed.redeployFunction = true;
@@ -69,7 +81,8 @@ export function setupKillSwitch({
   controlProjectId = process.env.CONTROL_PROJECT_ID || '',
   budgetAmount = process.env.BUDGET_AMOUNT || '',
   currency = process.env.BILLING_CURRENCY || '',
-  calendarPeriod = process.env.BUDGET_PERIOD || 'month',
+  calendarPeriod = process.env.BUDGET_PERIOD || 'custom',
+  startDate = process.env.BUDGET_START_DATE || '',
   region = process.env.FUNCTION_REGION || 'us-central1',
   topicName = 'billing-kill-switch',
   functionName = 'billing-kill-switch-fn',
@@ -202,9 +215,14 @@ export function setupKillSwitch({
 
   const normalizedAmount = `${numericAmount}${finalCurrency}`;
   const threshold90 = (Number(numericAmount) * 0.9).toFixed(2).replace(/\.00$/, '');
-  const validPeriod = ['month', 'quarter', 'year'].includes(calendarPeriod) ? calendarPeriod : 'month';
+  const useCustomStartDate = Boolean(startDate) || !['month', 'quarter', 'year'].includes(calendarPeriod);
+  const resolvedStartDate = startDate || getTodayDateString();
+  const validPeriod = ['month', 'quarter', 'year'].includes(calendarPeriod) ? calendarPeriod : 'custom';
+  const periodFlag = useCustomStartDate ? `--start-date=${resolvedStartDate}` : `--calendar-period=${validPeriod}`;
+  const periodLabel = useCustomStartDate ? `from ${resolvedStartDate}` : validPeriod;
+
   console.log(
-    `[Kill Switch Setup] 目標專案: ${targetProjectId} | 帳單帳戶: ${billingAccountId} | 設定抵免額: ${numericAmount} ${finalCurrency} (週期: ${validPeriod}, 90% 熔斷門檻: ${threshold90} ${finalCurrency})`
+    `[Kill Switch Setup] 目標專案: ${targetProjectId} | 帳單帳戶: ${billingAccountId} | 設定抵免額: ${numericAmount} ${finalCurrency} (計算區間: ${periodLabel}, 90% 熔斷門檻: ${threshold90} ${finalCurrency})`
   );
 
   // 6. 確認 / 建立 Pub/Sub Topic 並授予 Cloud Billing Budget 服務帳戶發布權限
@@ -297,9 +315,9 @@ export function setupKillSwitch({
     console.warn(`⚠️ 警告：設定服務帳戶 (${runtimeSa}) 之帳單解綁 IAM 權限時發生例外，請確認您擁有目標專案之 Owner 或 Project IAM Admin 權限。`);
   }
 
-  // 9. 檢查是否已有綁定相同 Pub/Sub 主題的熔斷預算，若有則更新，若無則新建
+  // 9. 檢查是否已有綁定相同 Pub/Sub 主題或同名系列的熔斷預算，若有則更新，若無則新建
   const fullTopic = `projects/${controlProjectId}/topics/${topicName}`;
-  const budgetDisplayName = `90% Credit Kill-Switch Guard (${numericAmount} ${finalCurrency} / ${validPeriod})`;
+  const budgetDisplayName = `90% Credit Kill-Switch (${numericAmount} ${finalCurrency}, ${periodLabel})`.slice(0, 60);
 
   let existingBudgetName = '';
   try {
@@ -310,7 +328,7 @@ export function setupKillSwitch({
     const budgets = JSON.parse(listOut || '[]');
     const found = budgets.find((b) => {
       const rule = b.notificationsRule || b.allUpdatesRule;
-      return rule && rule.pubsubTopic === fullTopic;
+      return (rule && rule.pubsubTopic === fullTopic) || (b.displayName && b.displayName.startsWith('90% Credit Kill-Switch'));
     });
     if (found && found.name) {
       existingBudgetName = found.name.split('/').pop();
@@ -319,7 +337,7 @@ export function setupKillSwitch({
 
   try {
     if (existingBudgetName) {
-      console.log(`正在更新既有 90% 熔斷預算 (${existingBudgetName}) 金額為 ${normalizedAmount} (週期: ${validPeriod})...`);
+      console.log(`正在更新既有 90% 熔斷預算 (${existingBudgetName}) 金額為 ${normalizedAmount} (區間: ${periodLabel})...`);
       const updateCmd = [
         `${gcloud} billing budgets update ${existingBudgetName}`,
         `--billing-account=${billingAccountId}`,
@@ -327,13 +345,14 @@ export function setupKillSwitch({
         `--display-name="${budgetDisplayName}"`,
         `--budget-amount=${normalizedAmount}`,
         `--credit-types-treatment=exclude-all-credits`,
-        `--calendar-period=${validPeriod}`,
+        periodFlag,
+        `--notifications-rule-pubsub-topic=${fullTopic}`,
         '--quiet'
       ].join(' ');
       execSync(updateCmd, { stdio: 'inherit', windowsHide: true });
-      console.log(`✅ 90% 熔斷預算已成功更新為 ${numericAmount} ${finalCurrency} (90% 觸發點: ${threshold90} ${finalCurrency})！`);
+      console.log(`✅ 90% 熔斷預算已成功更新為 ${numericAmount} ${finalCurrency} (區間: ${periodLabel}，90% 觸發點: ${threshold90} ${finalCurrency})！`);
     } else {
-      console.log(`正在建立 90% 預算警示 (金額: ${normalizedAmount}, 週期: ${validPeriod})...`);
+      console.log(`正在建立 90% 預算警示 (金額: ${normalizedAmount}, 區間: ${periodLabel})...`);
       const createCmd = [
         `${gcloud} billing budgets create`,
         `--billing-account=${billingAccountId}`,
@@ -341,14 +360,14 @@ export function setupKillSwitch({
         `--display-name="${budgetDisplayName}"`,
         `--budget-amount=${normalizedAmount}`,
         `--credit-types-treatment=exclude-all-credits`,
-        `--calendar-period=${validPeriod}`,
+        periodFlag,
         '--threshold-rule=percent=0.9,basis=current-spend',
         '--threshold-rule=percent=1.0,basis=current-spend',
         `--notifications-rule-pubsub-topic=${fullTopic}`,
         '--quiet'
       ].join(' ');
       execSync(createCmd, { stdio: 'inherit', windowsHide: true });
-      console.log(`✅ 90% 預算警示與 Pub/Sub 串接建立成功 (${numericAmount} ${finalCurrency}，90% 觸發點: ${threshold90} ${finalCurrency})！`);
+      console.log(`✅ 90% 預算警示與 Pub/Sub 串接建立成功 (${numericAmount} ${finalCurrency}，區間: ${periodLabel}，90% 觸發點: ${threshold90} ${finalCurrency})！`);
     }
     return true;
   } catch (err) {

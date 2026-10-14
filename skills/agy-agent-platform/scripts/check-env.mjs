@@ -29,7 +29,7 @@ export function checkEnv({ targetProject = '' } = {}) {
     billingAccountDisplayName: '',
     billingCurrency: '',
     killSwitchFunctionDeployed: false,
-    creditCheckNote: 'Google Cloud API 未開放查詢促銷抵免額 (Promotional Credits) 餘額。設定 90% 預算警報前，必須先使用 ask_question 詢問使用者實際抵免額總額與週期 (month/year)。',
+    creditCheckNote: 'Google Cloud API 未開放查詢促銷抵免額 (Promotional Credits) 餘額。設定 90% 預算警報前，必須先使用 ask_question 詢問使用者目前剩餘可用抵免額總額與計算區間 (custom/month)。',
     recommendation: ''
   };
 
@@ -170,7 +170,7 @@ export function checkEnv({ targetProject = '' } = {}) {
     result.recommendation = `目前 gcloud 預設專案 (${result.currentProject}) 與 ADC 配額專案 (${result.adcQuotaProject}) 不一致。若需使用 ADC，建議執行 gcloud auth application-default login --project=${result.currentProject} 重新對齊。`;
   } else {
     const currencyHint = result.billingCurrency ? ` (帳單預設幣別: ${result.billingCurrency})` : '';
-    result.recommendation = `環境完備${currencyHint}。設定 90% 自動熔斷預算前，請務必使用 ask_question 向使用者確認抵免額總額與週期 (month/year)。`;
+    result.recommendation = `環境完備${currencyHint}。設定 90% 自動熔斷預算前，請務必使用 ask_question 向使用者確認剩餘抵免額總額與計算區間 (預設 custom 從今日起算)。`;
   }
 
   return result;

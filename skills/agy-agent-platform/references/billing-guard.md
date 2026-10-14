@@ -44,9 +44,9 @@
 * Google Cloud Billing API 與 `gcloud billing` 目前**並未開放**查詢「促銷抵免額（Promotional Credits / Free Trial Credits）剩餘餘額」的 API 端點（僅能在 Google Cloud 網頁控制台「帳單 > 抵免額」查看）。
 * 因此，設定預算前必須透過 `ask_question` 讓使用者確認並輸入抵免額總額，嚴禁硬編碼預設金額。
 
-### 3.2 預算週期選擇：每月重置（`month`）vs 年度累計（`year`）
-* **`--period=month`（預設推薦，適合 AI Pro 訂閱戶）**：Google One AI Pro 每月發放 10 美元（USD 10）GCP 抵免額，選用 `month` 可在每月初自動歸零重新計算當月 90% 門檻。
-* **`--period=year`（適合單筆長效抵免額）**：針對新戶 $300 美元試用金或單次活動贈點，選用 `year` 可追蹤整年度累計消耗量。
+### 3.2 預算計算起點與週期選擇：從設定當日起算（`custom` / `--start-date`）vs 每月重置（`month`）
+* **`--period=custom`（預設推薦，自動套用 `--start-date=<YYYY-MM-DD>`）**：當啟用 `--credit-types-treatment=exclude-all-credits` 時，若使用 `year` 或 `month` 週期，Google Cloud 會回溯計算該年度（1/1 起）或當月（1 號起）所有已消耗掉的歷史抵免額；若歷史消耗早已超過目前剩餘抵免額的 90%，會導致預算建立當下立即誤發 90% 警告信。使用 `--start-date` 從設定當日起算，僅追蹤**設定日起之新增消耗**，讓使用者直接輸入「目前剩餘的可用抵免額總額」，在真正消耗達 90% 時才寄發唯一一封警告信並執行熔斷。
+* **`--period=month`（適合當月尚無歷史消耗之每月固定配額）**：Google One AI Pro 每月發放 10 美元（USD 10）GCP 抵免額，選用 `month` 可在每月初自動歸零重新計算當月 90% 門檻。
 
 ### 3.3 多筆抵免額（Multiple Credits）會自動切換嗎？
 * **會自動切換**，前提是滿足以下三項條件：

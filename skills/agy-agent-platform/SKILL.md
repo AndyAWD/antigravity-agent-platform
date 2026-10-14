@@ -98,17 +98,17 @@ node skills/agy-agent-platform/scripts/check-env.mjs
 1. **【強制前置步驟】使用 `ask_question` 詢問使用者抵免額總額與計算週期（嚴禁自行猜測或硬編碼金額）**：
    - **為什麼不能只靠 `gcloud` 自動加總？** Google Cloud Billing API 目前僅開放查詢帳單帳戶狀態與預設幣別（`currencyCode`），**並未開放查詢「促銷抵免額（Promotional Credits）」剩餘餘額與明細的 API 端點**。因此，代理**絕對不可**自行假設預設金額（如 `10000TWD` 或 `10USD`）。
    - **向使用者說明多筆抵免額、計算週期與幣別規則**：
-     - **每月固定抵免額 vs 單筆累計抵免額**：若為 Google One AI Pro 每月發放之 10 美元（USD 10）抵免額，預算週期應設定為 `--period=month`（每月重置）；若為單筆長效抵免額（如新戶試用或活動贈點），則可設定為 `--period=year`（年度累計）。
-     - **多筆抵免額自動切換**：若同一帳單帳戶下擁有不只一筆抵免額，只要皆在有效期限內且適用範圍（Scope）涵蓋 Vertex AI / Gemini，Google Cloud 會在單筆抵免額用盡時**自動無縫切換**扣抵下一筆。請使用者將當期所有可用抵免額**加總後**輸入總金額。
-     - **帳單幣別自動對齊**：Google Cloud 規定預算金額幣別必須與帳單帳戶綁定幣別（`billingCurrency`，由 `check-env.mjs` 自動偵測，如 `TWD` 或 `USD`）一致，腳本會自動套用該幣別（若您的帳單帳戶為 `TWD`，請將美元抵免額換算或查看控制台顯示之對應幣別金額後輸入）。
+     - **從設定當日起算（`custom` / `--start-date`，預設推薦）vs 每月固定重置（`month`）**：由於開啟 `--credit-types-treatment=exclude-all-credits` 後，若選用 `year` 或 `month` 會回溯計算該年度（1/1 起）或當月（1 號起）所有已消耗掉的歷史抵免額，導致新設定時若歷史總消耗已超過剩餘抵免額的 90% 就會瞬間誤觸警告。因此預設推薦使用 `--period=custom`（底層自動套用 `--start-date=<今日日期>`），僅計算**從設定當日起算的新增消耗**，讓使用者直接輸入「目前剩餘的可用抵免額總額」即可精準在用滿 90% 時收到唯一一封警告信並熔斷。
+     - **多筆抵免額自動切換**：若同一帳單帳戶下擁有不只一筆抵免額（例如 5 筆 $10 美元抵免額，已用完 1 筆剩 4 筆），只要皆在有效期限內且適用範圍（Scope）涵蓋 Vertex AI / Gemini，Google Cloud 會在單筆抵免額用盡時**自動無縫切換**扣抵下一筆。請使用者將**目前剩餘可用**之抵免額加總後輸入總金額。
+     - **帳單幣別自動對齊**：Google Cloud 規定預算金額幣別必須與帳單帳戶綁定幣別（`billingCurrency`，由 `check-env.mjs` 自動偵測，如 `TWD` 或 `USD`）一致，腳本會自動套用該幣別（若您的帳單帳戶為 `TWD`，請將剩餘美元抵免額換算或查看控制台顯示之對應幣別金額後輸入）。
    - **呼叫 `ask_question` 工具（JSON 格式）**：
      - ⚠️ **Cortex 工具限制與防誤導規範**：`ask_question` 工具底層強制要求 `options` 陣列**至少包含 2 個選項**（傳入空陣列 `[]` 會觸發 `invalid_args: each question requires at least 2 options, got 0` 錯誤）；但同時**嚴禁在 `options` 中列出硬編碼預設金額**（如 `1500 TWD`、`3000 TWD`），以免誤導使用者以為只能從預設數字中挑選。
-     - 請提供 2 個非金額之功能性輔助選項，並在 `question` 題幹中明確引導使用者直接使用對話框底部的**預設自訂輸入欄（Write-in）**手動輸入實際總金額（純數字，例如 `10` 或 `1500`）：
+     - 請提供 2 個非金額之功能性輔助選項，並在 `question` 題幹中明確引導使用者直接使用對話框底部的**預設自訂輸入欄（Write-in）**手動輸入實際剩餘總金額（純數字，例如 `10` 或 `1300`）：
      ```json
      {
        "questions": [
          {
-           "question": "請於下方自訂輸入欄（Other / Write-in）直接輸入您在 Google Cloud「帳單 > 抵免額 (Credits)」中當期可用抵免額加總後的總金額（請直接輸入與帳單幣別相符的純數字，例如 10 或 320；系統將於消耗達 90% 時自動斷電解綁）：",
+           "question": "請於下方自訂輸入欄（Other / Write-in）直接輸入您在 Google Cloud「帳單 > 抵免額 (Credits)」中目前剩餘可用抵免額加總後的總金額（請直接輸入與帳單幣別相符的純數字，例如 10 或 1300；系統將於後續消耗達 90% 時自動斷電解綁）：",
            "is_multi_select": false,
            "options": [
              "我還不清楚抵免額總額，請先指引我至 Google Cloud 控制台查詢",
@@ -116,11 +116,11 @@ node skills/agy-agent-platform/scripts/check-env.mjs
            ]
          },
          {
-           "question": "請選擇此筆抵免額的預算累計週期：",
+           "question": "請選擇此筆抵免額預算的計算起點與週期：",
            "is_multi_select": false,
            "options": [
-             "(Recommended) 每月重置 (month) — 適合 AI Pro 每月發放 10 美元抵免額",
-             "年度累計 (year) — 適合單筆長效或活動贈送之抵免額"
+             "(Recommended) 從今日起算 (custom / --start-date) — 僅追蹤今日起之新增消耗，排除過去已用完之歷史抵免額",
+             "每月重置 (month) — 每月 1 號歸零重算，適合每月固定發放且當月尚無歷史消耗之抵免額"
            ]
          }
        ]
@@ -140,9 +140,9 @@ node skills/agy-agent-platform/scripts/check-env.mjs
      ```
 
 3. **建立或更新 90% 預算警示與 Pub/Sub 主題串接**：
-   將使用者於 `ask_question` 確認之金額與週期（`month` 或 `year`）傳入執行（腳本會自動套用 `--credit-types-treatment=exclude-all-credits` 追蹤扣除抵免額前的原始總消耗量，並自動對齊帳單帳戶幣別）：
+   將使用者於 `ask_question` 確認之金額與計算區間（預設 `--period=custom` 自動套用今日 `--start-date`，或 `--period=month`）傳入執行（腳本會自動套用 `--credit-types-treatment=exclude-all-credits` 追蹤扣除抵免額前的原始消耗量，並自動對齊帳單帳戶幣別）：
    ```bash
-   node skills/agy-agent-platform/scripts/setup-killswitch.mjs --amount=<USER_CONFIRMED_AMOUNT> --period=<month|year>
+   node skills/agy-agent-platform/scripts/setup-killswitch.mjs --amount=<USER_CONFIRMED_AMOUNT> --period=<custom|month>
    ```
 
 4. **執行安全演練測試（Dry-Run Verification）**：

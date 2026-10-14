@@ -24,7 +24,7 @@ agy plugin install https://github.com/AndyAWD/antigravity-agent-platform
 - **支援 `agy` CLI `/logout` 切換雲端專案與免金鑰認證**：針對透過 `/logout` 將 `agy` CLI 切換為 Google Cloud 專案隨用即付模式（如運用 Google One AI Pro 每月 $10 美元 GCP 抵免額呼叫 Gemini 4 Argon）的使用者，自動對齊本機 `gcloud` 與應用程式預設憑證（Application Default Credentials）（ADC），無須手動產生 API 金鑰。
 - **Agent Platform 與 Gemini 4 Argon 一鍵開通**：為全新雲端專案一鍵啟用 `aiplatform.googleapis.com`、`cloudaicompanion.googleapis.com`、`generativelanguage.googleapis.com`、`agentregistry.googleapis.com` 與 `geminicloudassist.googleapis.com`，支援 1,048,576 權杖（Tokens）輸入上限與 32,768 權杖輸出上限。
 - **90% 抵免額雲端自動熔斷機制（端到端自動部署）**：
-  - 自動偵測帳單帳戶綁定幣別（`currencyCode`），設定前強制透過 `ask_question` 互動詢問實際抵免額總額與週期（支援 `month` 月度配額如 AI Pro 每月 $10 美元，或 `year` 年度抵免額）。
+  - 自動偵測帳單帳戶綁定幣別（`currencyCode`），設定前強制透過 `ask_question` 互動詢問目前剩餘可用抵免額總額與計算區間（預設推薦 `custom` 自動套用 `--start-date` 從當日起算以排除過往已用完之歷史抵免額，亦支援 `month` 月度重置）。
   - 一鍵完成 Cloud Billing 預算快訊（強制啟用 `exclude-all-credits` 追蹤抵免前原始總消耗量）、Cloud Pub/Sub 主題、Cloud Run 函式（Node.js 22 ES Modules）部署，並**自動綁定服務帳戶解除帳單所需之身分與存取權管理（Identity and Access Management）（IAM）權限**（`roles/billing.projectManager` 與 `roles/billing.admin`）。
   - 內建 `--dry-run-test` 安全演練模式，可在不實際切斷帳單的情況下驗證 Pub/Sub 觸發與帳單 API 權限。
 - **官方標準外掛架構**：遵循 Antigravity 官方 `plugin.json` 清單規範，通過 `agy plugin validate` 驗證，支援多裝置快速分發與無縫熱更新。
@@ -99,7 +99,7 @@ antigravity-agent-platform/
   1. **跨平台環境預檢**：自動偵測作業系統、`gcloud` 安裝路徑、身分登入狀態、應用程式預設憑證（ADC）、帳單帳戶預設幣別（`currencyCode`）以及自動熔斷函式部署狀態。
   2. **智慧安裝與綁定引導**：若缺少 `gcloud`，依作業系統引導自動安裝；若未登入，開啟瀏覽器完成帳號與憑證綁定。
   3. **雲端 API 啟用**：為目標專案啟用 Agent Platform、Vertex AI 與 Cloud Billing Budgets 相關 API。
-  4. **互動確認抵免額與雲端 90% 熔斷部署**：先透過 `ask_question`（JSON 格式，不列出誤導性預設金額選項）引導使用者輸入可用抵免額總額與週期（`month` 或 `year`），再自動部署 `billing-kill-switch-fn` Cloud Run 函式、配置 IAM 解綁權限，並建立 90% 預算警示（`exclude-all-credits`）與 Pub/Sub 主題串接。
+  4. **互動確認抵免額與雲端 90% 熔斷部署**：先透過 `ask_question`（JSON 格式，不列出誤導性預設金額選項）引導使用者輸入目前剩餘可用抵免額總額與計算區間（預設 `custom` 以 `--start-date` 從當日起算，或 `month` 每月重置），再自動部署 `billing-kill-switch-fn` Cloud Run 函式、配置 IAM 解綁權限，並建立 90% 預算警示（`exclude-all-credits`）與 Pub/Sub 主題串接。
   5. **安全演練與連線驗證**：支援透過 `--dry-run-test` 驗證熔斷管線權限，並確認專案可於 `agy` CLI、Antigravity 2.0 桌面版與 IDE 正常連線。
 
 - **參數說明**：
