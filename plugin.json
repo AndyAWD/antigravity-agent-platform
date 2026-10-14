@@ -1,0 +1,25 @@
+{
+  "name": "antigravity-agent-platform",
+  "displayName": "Antigravity Agent Platform",
+  "version": "1.0.0",
+  "description": "自動設定 Google Antigravity 的 Agent Platform / Gemini 4 認證模式，跨平台 (Windows/macOS) 智慧安裝與綁定 gcloud，並提供 90% 抵免額自動熔斷防刷卡安全保護。",
+  "author": {
+    "name": "Andy",
+    "email": "anandydy529@gmail.com"
+  },
+  "license": "MIT",
+  "keywords": [
+    "antigravity",
+    "agy",
+    "agent-platform",
+    "gemini-4",
+    "gemini-4-argon",
+    "vertex-ai",
+    "billing-guard",
+    "kill-switch"
+  ],
+  "suggestedPrompts": [
+    "設定 Agent Platform 與 Gemini 4 認證，並啟用 90% 防刷卡保護",
+    "檢查 gcloud 環境與專案抵免額狀態"
+  ]
+}

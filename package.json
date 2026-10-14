@@ -1,0 +1,22 @@
+{
+  "name": "antigravity-agent-platform",
+  "version": "1.0.0",
+  "description": "Antigravity Agent Platform & Gemini 4 Setup with 90% Billing Kill Switch Guard",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "validate": "agy plugin validate ."
+  },
+  "keywords": [
+    "antigravity",
+    "agy",
+    "agent-platform",
+    "gemini-4",
+    "gemini-4-argon",
+    "vertex-ai",
+    "billing-guard",
+    "kill-switch"
+  ],
+  "author": "Andy",
+  "license": "MIT"
+}

@@ -1,0 +1,13 @@
+{
+  "name": "billing-kill-switch",
+  "version": "1.1.0",
+  "description": "Google Cloud 90% 抵免額自動熔斷防刷卡 Cloud Run Function",
+  "type": "module",
+  "main": "index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@google-cloud/billing": "^6.0.0"
+  }
+}
